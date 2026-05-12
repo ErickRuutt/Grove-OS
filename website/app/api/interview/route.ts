@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
+const SESSION_ID_RE = /^[a-zA-Z0-9_-]{1,100}$/;
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_MESSAGES = 50;
+
 const client = new Anthropic();
 
 const SYSTEM_PROMPT = `You are Grove's company brain interviewer. Your job is to deeply understand a company through conversation.
@@ -39,11 +43,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
     }
 
+    if (!SESSION_ID_RE.test(sessionId)) {
+      console.warn("Interview API: invalid sessionId format rejected");
+      return NextResponse.json({ error: "Invalid sessionId" }, { status: 400 });
+    }
+
+    if (!Array.isArray(messages)) {
+      return NextResponse.json({ error: "messages must be an array" }, { status: 400 });
+    }
+
+    if (messages.length > MAX_MESSAGES) {
+      console.warn(`Interview API: message history limit exceeded (${messages.length})`);
+      return NextResponse.json({ error: "Message limit reached" }, { status: 400 });
+    }
+
+    for (const msg of messages) {
+      if (typeof msg.content === "string" && msg.content.length > MAX_MESSAGE_LENGTH) {
+        console.warn(`Interview API: oversized message rejected (${msg.content.length} chars)`);
+        return NextResponse.json({ error: "Message too long" }, { status: 400 });
+      }
+    }
+
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      messages: messages.map((m: { role: string; content: string }) => ({
+      messages: messages.map((m: { role: "user" | "assistant"; content: string }) => ({
         role: m.role,
         content: m.content,
       })),
@@ -67,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: assistantMessage.text });
   } catch (error) {
-    console.error("Interview API error:", error);
+    console.error("Interview API error:", error instanceof Error ? error.message : "unknown");
     return NextResponse.json({ error: "Failed to process interview" }, { status: 500 });
   }
 }
