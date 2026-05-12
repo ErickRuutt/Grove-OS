@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Nav from "./components/Nav";
+import WaitlistForm from "./components/WaitlistForm";
 
 const TABLE_ROWS = [
   {
@@ -393,52 +394,49 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Final CTA — dark */}
+      {/* Final CTA — dark, with waitlist form */}
       <section
         style={{
           background: "var(--bg-inverse)",
           padding: "120px 24px",
         }}
       >
-        <div className="mx-auto text-center" style={{ maxWidth: "640px" }}>
-          <h2
-            className="font-bold mb-6"
-            style={{
-              fontSize: "clamp(32px, 4vw, 40px)",
-              color: "var(--text-inverse)",
-              letterSpacing: "-0.02em",
-              lineHeight: "1.2",
-            }}
-          >
-            Your company needs a brain.
-          </h2>
+        <div className="mx-auto" style={{ maxWidth: "480px" }}>
+          <div className="text-center mb-10">
+            <h2
+              className="font-bold mb-6"
+              style={{
+                fontSize: "clamp(32px, 4vw, 40px)",
+                color: "var(--text-inverse)",
+                letterSpacing: "-0.02em",
+                lineHeight: "1.2",
+              }}
+            >
+              Your company needs a brain.
+            </h2>
+            <p
+              style={{
+                fontSize: "18px",
+                color: "rgba(247,246,243,0.65)",
+                lineHeight: "1.65",
+              }}
+            >
+              One that&apos;s continuously updated. Source-grounded. Conflict-resolved.
+              That any agent can read from. That compounds every day it runs.
+            </p>
+          </div>
+
+          <WaitlistForm source="homepage-cta" variant="dark" />
+
           <p
-            className="mb-10"
-            style={{
-              fontSize: "20px",
-              color: "rgba(247,246,243,0.65)",
-              lineHeight: "1.6",
-            }}
-          >
-            One that&apos;s continuously updated. Source-grounded. Conflict-resolved.
-            That any agent can read from. That compounds every day it runs.
-          </p>
-          <Link
-            href="/interview"
-            className="inline-block px-7 py-4 font-semibold text-sm"
-            style={{
-              background: "var(--bg-surface)",
-              color: "var(--text-primary)",
-            }}
-          >
-            Start building your company brain
-          </Link>
-          <p
-            className="mt-6 text-xs"
-            style={{ color: "rgba(247,246,243,0.40)" }}
+            className="mt-6 text-xs text-center"
+            style={{ color: "rgba(247,246,243,0.35)" }}
           >
             The companies that start building today will have six months of
-            accumulated understanding that no amount of money can buy later.
+            accumulated understanding that no amount of money can buy later.{" "}
+            <Link href="/interview" style={{ color: "rgba(247,246,243,0.5)", textDecoration: "underline" }}>
+              Try the interview now →
+            </Link>
           </p>
         </div>
       </section>

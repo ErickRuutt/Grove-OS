@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { label: "Benchmark", href: "/benchmark" },
   { label: "Blog", href: "/blog" },
   { label: "Docs", href: "/docs" },
+  { label: "Interview", href: "/interview" },
 ];
 
 export default function Nav() {
@@ -58,14 +59,14 @@ export default function Nav() {
 
         <div className="flex items-center gap-4">
           <Link
-            href="/interview"
+            href="/waitlist"
             className="hidden md:block text-sm font-medium px-7 py-3"
             style={{
               background: "var(--bg-inverse)",
               color: "var(--text-inverse)",
             }}
           >
-            Start building
+            Join waitlist
           </Link>
           <button
             className="md:hidden"
@@ -101,7 +102,7 @@ export default function Nav() {
             </Link>
           ))}
           <Link
-            href="/interview"
+            href="/waitlist"
             onClick={() => setMobileOpen(false)}
             className="text-sm font-medium px-7 py-4 text-center"
             style={{
@@ -109,7 +110,7 @@ export default function Nav() {
               color: "var(--text-inverse)",
             }}
           >
-            Start building
+            Join waitlist
           </Link>
         </div>
       )}
