@@ -2,10 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import type { FileSignal } from "../upload/route";
 
 const client = new Anthropic();
 
-const SUMMARY_PROMPT = `Based on this interview conversation, extract a structured company brain summary.
+const DATA_DIR = path.join(process.cwd(), "data", "interviews");
+
+const SUMMARY_PROMPT = `Based on the interview transcript and any uploaded document signals below, extract a unified company brain summary.
 
 Return a JSON object with:
 {
@@ -17,29 +20,61 @@ Return a JSON object with:
   "howDecisionsAreMade": "description of decision-making",
   "informalKnowledge": ["thing 1", "thing 2", ...],
   "whatMakesThemDifferent": "unique value proposition",
-  "openQuestions": ["gap 1", "gap 2", ...]
+  "openQuestions": ["gap 1", "gap 2", ...],
+  "sources": [
+    { "label": "Interview transcript", "type": "interview", "contribution": "brief description of what this contributed" },
+    { "label": "filename.pdf", "type": "file", "contribution": "brief description of what this contributed" }
+  ]
 }
 
-Only include fields you have evidence for from the conversation. Return ONLY valid JSON.`;
+Only include fields you have evidence for. Merge signals from all sources into one unified brain — do not produce parallel views. In "sources", only include sources that actually contributed signal. Return ONLY valid JSON.`;
 
-const DATA_DIR = path.join(process.cwd(), "data", "interviews");
+function formatFileSignals(signals: FileSignal[]): string {
+  if (!signals.length) return "";
+  return signals
+    .map((s) => {
+      const parts = [`--- Uploaded file: ${s.fileName} ---`];
+      if (s.entities?.length) parts.push(`Entities: ${s.entities.join("; ")}`);
+      if (s.keyFacts?.length) parts.push(`Key facts: ${s.keyFacts.join("; ")}`);
+      if (s.relationships?.length) parts.push(`Relationships: ${s.relationships.join("; ")}`);
+      if (s.dates?.length) parts.push(`Dates: ${s.dates.join("; ")}`);
+      if (s.decisions?.length) parts.push(`Decisions: ${s.decisions.join("; ")}`);
+      return parts.join("\n");
+    })
+    .join("\n\n");
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { sessionId, messages } = await req.json();
 
+    // Load stored file signals for this session
+    let fileSignals: FileSignal[] = [];
+    if (sessionId) {
+      try {
+        const sessionPath = path.join(DATA_DIR, `${sessionId}.json`);
+        const sessionData = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
+        fileSignals = sessionData.fileSignals || [];
+      } catch {
+        // no session file yet
+      }
+    }
+
+    const transcript = messages
+      .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
+      .join("\n\n");
+
+    const fileSignalText = formatFileSignals(fileSignals);
+
+    const userContent = fileSignalText
+      ? `Interview transcript:\n\n${transcript}\n\n${fileSignalText}`
+      : `Interview transcript:\n\n${transcript}`;
+
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 2048,
       system: SUMMARY_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Here is the interview transcript:\n\n${messages
-            .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
-            .join("\n\n")}`,
-        },
-      ],
+      messages: [{ role: "user", content: userContent }],
     });
 
     const text =
@@ -59,7 +94,11 @@ export async function POST(req: NextRequest) {
         const existing = JSON.parse(await fs.readFile(filePath, "utf-8"));
         await fs.writeFile(
           filePath,
-          JSON.stringify({ ...existing, summary, summarizedAt: new Date().toISOString() }, null, 2)
+          JSON.stringify(
+            { ...existing, summary, summarizedAt: new Date().toISOString() },
+            null,
+            2
+          )
         );
       } catch {
         // session file might not exist

@@ -5,6 +5,31 @@ import Link from "next/link";
 
 type Message = { role: "user" | "assistant"; content: string };
 
+type FileSignal = {
+  fileName: string;
+  mimeType: string;
+  uploadedAt: string;
+  entities?: string[];
+  keyFacts?: string[];
+  relationships?: string[];
+  dates?: string[];
+  decisions?: string[];
+};
+
+type UploadedFile = {
+  id: string;
+  name: string;
+  status: "analyzing" | "done" | "error";
+  signal?: FileSignal;
+  error?: string;
+};
+
+type BrainSource = {
+  label: string;
+  type: "interview" | "file";
+  contribution: string;
+};
+
 type BrainSummary = {
   companyName?: string;
   whatTheyDo?: string;
@@ -15,11 +40,15 @@ type BrainSummary = {
   informalKnowledge?: string[];
   whatMakesThemDifferent?: string;
   openQuestions?: string[];
+  sources?: BrainSource[];
 };
 
 function generateSessionId() {
   return `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
+
+const ACCEPTED_TYPES = ".txt,.md,.json,.csv,.pdf";
+const MAX_FILES = 5;
 
 export default function InterviewPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -30,7 +59,13 @@ export default function InterviewPage() {
   const [showSummary, setShowSummary] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [started, setStarted] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [pasteMode, setPasteMode] = useState(false);
+  const [pasteContent, setPasteContent] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -112,7 +147,85 @@ export default function InterviewPage() {
     }
   }
 
+  async function uploadFile(file: File) {
+    if (uploadedFiles.length >= MAX_FILES) return;
+
+    const id = `file_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    setUploadedFiles((prev) => [...prev, { id, name: file.name, status: "analyzing" }]);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("sessionId", sessionId);
+
+    try {
+      const res = await fetch("/api/interview/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setUploadedFiles((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, status: "done", signal: data.signal } : f))
+      );
+    } catch (err) {
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.id === id
+            ? { ...f, status: "error", error: err instanceof Error ? err.message : "Upload failed" }
+            : f
+        )
+      );
+    }
+  }
+
+  async function submitPaste() {
+    if (!pasteContent.trim()) return;
+    setPasteMode(false);
+
+    const id = `paste_${Date.now()}`;
+    const name = `pasted-text-${new Date().toLocaleTimeString()}.txt`;
+    setUploadedFiles((prev) => [...prev, { id, name, status: "analyzing" }]);
+
+    const formData = new FormData();
+    formData.append("pasteText", pasteContent);
+    formData.append("sessionId", sessionId);
+    setPasteContent("");
+
+    try {
+      const res = await fetch("/api/interview/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setUploadedFiles((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, name: data.signal.fileName, status: "done", signal: data.signal } : f))
+      );
+    } catch (err) {
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.id === id
+            ? { ...f, status: "error", error: err instanceof Error ? err.message : "Upload failed" }
+            : f
+        )
+      );
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    files.slice(0, MAX_FILES - uploadedFiles.length).forEach(uploadFile);
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    files.slice(0, MAX_FILES - uploadedFiles.length).forEach(uploadFile);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeFile(id: string) {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+  }
+
   const canSummarize = messages.filter((m) => m.role === "user").length >= 3;
+  const analyzingCount = uploadedFiles.filter((f) => f.status === "analyzing").length;
+  const doneCount = uploadedFiles.filter((f) => f.status === "done").length;
 
   return (
     <div
@@ -135,6 +248,22 @@ export default function InterviewPage() {
             <span className="font-semibold">Grove</span>
           </Link>
           <div className="flex items-center gap-3">
+            {started && uploadedFiles.length < MAX_FILES && (
+              <button
+                onClick={() => setShowUpload((v) => !v)}
+                className="text-sm px-3 py-2 rounded-lg font-medium transition-all hover:opacity-90 flex items-center gap-1.5"
+                style={{
+                  border: "1px solid #27272a",
+                  color: doneCount > 0 ? "#22c55e" : "#71717a",
+                  background: "#111111",
+                }}
+              >
+                <span>+</span>
+                <span>
+                  {doneCount > 0 ? `${doneCount} file${doneCount > 1 ? "s" : ""} loaded` : "Load data"}
+                </span>
+              </button>
+            )}
             {canSummarize && !showSummary && (
               <button
                 onClick={generateSummary}
@@ -156,8 +285,8 @@ export default function InterviewPage() {
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full px-4 py-6 gap-6">
-        {/* Chat */}
-        <div className="flex-1 flex flex-col min-h-0">
+        {/* Left column: chat + upload zone */}
+        <div className="flex-1 flex flex-col min-h-0 gap-4">
           {!started ? (
             /* Landing state */
             <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
@@ -184,8 +313,8 @@ export default function InterviewPage() {
                 {[
                   "6–8 focused questions",
                   "~15 minutes total",
-                  "A structured snapshot of your company brain",
-                  "Files your agents can immediately use",
+                  "Upload docs to enrich the brain",
+                  "A structured snapshot your agents can use",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2">
                     <span style={{ color: "#22c55e" }}>✓</span>
@@ -202,93 +331,238 @@ export default function InterviewPage() {
               </button>
             </div>
           ) : (
-            /* Chat state */
             <>
-              <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-                {messages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              {/* Chat */}
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+                  {messages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                          msg.role === "user" ? "rounded-br-sm" : "rounded-bl-sm"
+                        }`}
+                        style={
+                          msg.role === "user"
+                            ? { background: "#22c55e", color: "#0a0a0a" }
+                            : { background: "#18181b", border: "1px solid #27272a" }
+                        }
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {loading && (
+                    <div className="flex justify-start">
+                      <div
+                        className="px-4 py-3 rounded-2xl rounded-bl-sm text-sm"
+                        style={{ background: "#18181b", border: "1px solid #27272a" }}
+                      >
+                        <span className="flex gap-1 items-center" style={{ color: "#71717a" }}>
+                          <span className="animate-pulse">●</span>
+                          <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>●</span>
+                          <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>●</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={bottomRef} />
+                </div>
+
+                <form
+                  onSubmit={sendMessage}
+                  className="flex gap-3 pt-4"
+                  style={{ borderTop: "1px solid #27272a" }}
+                >
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Type your answer..."
+                    disabled={loading}
+                    className="flex-1 px-4 py-3 rounded-xl text-sm outline-none transition-all"
+                    style={{
+                      background: "#111111",
+                      border: "1px solid #27272a",
+                      color: "#f0f0f0",
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !input.trim()}
+                    className="px-5 py-3 rounded-xl font-medium text-sm transition-all disabled:opacity-40"
+                    style={{ background: "#22c55e", color: "#0a0a0a" }}
                   >
-                    <div
-                      className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                        msg.role === "user"
-                          ? "rounded-br-sm"
-                          : "rounded-bl-sm"
-                      }`}
-                      style={
-                        msg.role === "user"
-                          ? {
-                              background: "#22c55e",
-                              color: "#0a0a0a",
-                            }
-                          : {
-                              background: "#18181b",
-                              border: "1px solid #27272a",
-                            }
-                      }
+                    Send
+                  </button>
+                </form>
+
+                {canSummarize && !showSummary && (
+                  <div className="pt-3 text-center">
+                    <button
+                      onClick={generateSummary}
+                      className="text-xs underline transition-opacity hover:opacity-70"
+                      style={{ color: "#22c55e" }}
                     >
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-                {loading && (
-                  <div className="flex justify-start">
-                    <div
-                      className="px-4 py-3 rounded-2xl rounded-bl-sm text-sm"
-                      style={{
-                        background: "#18181b",
-                        border: "1px solid #27272a",
-                      }}
-                    >
-                      <span className="flex gap-1 items-center" style={{ color: "#71717a" }}>
-                        <span className="animate-pulse">●</span>
-                        <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>●</span>
-                        <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>●</span>
-                      </span>
-                    </div>
+                      Ready to see your company brain? →
+                    </button>
                   </div>
                 )}
-                <div ref={bottomRef} />
               </div>
 
-              <form
-                onSubmit={sendMessage}
-                className="flex gap-3 pt-4"
-                style={{ borderTop: "1px solid #27272a" }}
-              >
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type your answer..."
-                  disabled={loading}
-                  className="flex-1 px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                  style={{
-                    background: "#111111",
-                    border: "1px solid #27272a",
-                    color: "#f0f0f0",
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={loading || !input.trim()}
-                  className="px-5 py-3 rounded-xl font-medium text-sm transition-all disabled:opacity-40"
-                  style={{ background: "#22c55e", color: "#0a0a0a" }}
+              {/* Upload panel */}
+              {showUpload && (
+                <div
+                  className="rounded-2xl p-4 space-y-3"
+                  style={{ background: "#111111", border: "1px solid #27272a" }}
                 >
-                  Send
-                </button>
-              </form>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">Load data into the brain</p>
+                    <button
+                      onClick={() => setShowUpload(false)}
+                      className="text-xs hover:opacity-70"
+                      style={{ color: "#71717a" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
 
-              {canSummarize && !showSummary && (
-                <div className="pt-3 text-center">
-                  <button
-                    onClick={generateSummary}
-                    className="text-xs underline transition-opacity hover:opacity-70"
-                    style={{ color: "#22c55e" }}
-                  >
-                    Ready to see your company brain? →
-                  </button>
+                  {/* Dropzone */}
+                  {!pasteMode && (
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                      onDragLeave={() => setDragging(false)}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-xl p-6 text-center cursor-pointer transition-all"
+                      style={{
+                        border: `1px dashed ${dragging ? "#22c55e" : "#3f3f46"}`,
+                        background: dragging ? "rgba(34,197,94,0.04)" : "transparent",
+                      }}
+                    >
+                      <p className="text-sm" style={{ color: "#71717a" }}>
+                        Drop files here or{" "}
+                        <span style={{ color: "#22c55e" }}>browse</span>
+                      </p>
+                      <p className="text-xs mt-1" style={{ color: "#3f3f46" }}>
+                        .txt · .md · .json · .csv · .pdf — max 10MB, {MAX_FILES} files
+                      </p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={ACCEPTED_TYPES}
+                        multiple
+                        className="hidden"
+                        onChange={handleFileInput}
+                      />
+                    </div>
+                  )}
+
+                  {/* Paste text mode */}
+                  <div>
+                    {!pasteMode ? (
+                      <button
+                        onClick={() => setPasteMode(true)}
+                        className="text-xs hover:opacity-70 transition-opacity"
+                        style={{ color: "#71717a" }}
+                      >
+                        Or paste text →
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <textarea
+                          value={pasteContent}
+                          onChange={(e) => setPasteContent(e.target.value)}
+                          placeholder="Paste any text — meeting notes, docs, context..."
+                          rows={5}
+                          className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+                          style={{
+                            background: "#0a0a0a",
+                            border: "1px solid #27272a",
+                            color: "#f0f0f0",
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={submitPaste}
+                            disabled={!pasteContent.trim()}
+                            className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40 transition-all"
+                            style={{ background: "#22c55e", color: "#0a0a0a" }}
+                          >
+                            Analyze text
+                          </button>
+                          <button
+                            onClick={() => { setPasteMode(false); setPasteContent(""); }}
+                            className="text-xs px-3 py-1.5 rounded-lg transition-all hover:opacity-70"
+                            style={{ border: "1px solid #27272a", color: "#71717a" }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* File list */}
+                  {uploadedFiles.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      {uploadedFiles.map((f) => (
+                        <div
+                          key={f.id}
+                          className="flex items-center gap-2 text-xs"
+                        >
+                          <span
+                            className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-xs"
+                            style={{
+                              background:
+                                f.status === "done"
+                                  ? "rgba(34,197,94,0.15)"
+                                  : f.status === "error"
+                                  ? "rgba(239,68,68,0.15)"
+                                  : "rgba(113,113,122,0.15)",
+                              color:
+                                f.status === "done"
+                                  ? "#22c55e"
+                                  : f.status === "error"
+                                  ? "#ef4444"
+                                  : "#71717a",
+                            }}
+                          >
+                            {f.status === "done" ? "✓" : f.status === "error" ? "✕" : "…"}
+                          </span>
+                          <span className="flex-1 truncate" style={{ color: f.status === "error" ? "#ef4444" : "#a1a1aa" }}>
+                            {f.name}
+                            {f.status === "analyzing" && (
+                              <span style={{ color: "#71717a" }}> — analyzing...</span>
+                            )}
+                            {f.status === "error" && f.error && (
+                              <span style={{ color: "#ef4444" }}> — {f.error}</span>
+                            )}
+                          </span>
+                          <button
+                            onClick={() => removeFile(f.id)}
+                            className="flex-shrink-0 hover:opacity-70"
+                            style={{ color: "#3f3f46" }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {analyzingCount > 0 && (
+                    <p className="text-xs" style={{ color: "#71717a" }}>
+                      Analyzing {analyzingCount} file{analyzingCount > 1 ? "s" : ""}... This will be included in your brain summary.
+                    </p>
+                  )}
+                  {doneCount > 0 && analyzingCount === 0 && (
+                    <p className="text-xs" style={{ color: "#22c55e" }}>
+                      {doneCount} file{doneCount > 1 ? "s" : ""} ready — will be included when you generate your brain.
+                    </p>
+                  )}
                 </div>
               )}
             </>
@@ -366,10 +640,7 @@ export default function InterviewPage() {
                         <span
                           key={i}
                           className="px-2 py-0.5 rounded text-xs"
-                          style={{
-                            background: "#18181b",
-                            border: "1px solid #27272a",
-                          }}
+                          style={{ background: "#18181b", border: "1px solid #27272a" }}
                         >
                           {t}
                         </span>
@@ -410,12 +681,40 @@ export default function InterviewPage() {
                   </div>
                 )}
 
+                {/* Sources / provenance */}
+                {summary.sources && summary.sources.length > 0 && (
+                  <div
+                    className="pt-3 mt-1 space-y-2"
+                    style={{ borderTop: "1px solid #27272a" }}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#3f3f46" }}>Sources</p>
+                    {summary.sources.map((s, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <span
+                          className="flex-shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-xs"
+                          style={{
+                            background: s.type === "file" ? "rgba(34,197,94,0.08)" : "#18181b",
+                            color: s.type === "file" ? "#22c55e" : "#71717a",
+                            border: `1px solid ${s.type === "file" ? "rgba(34,197,94,0.2)" : "#27272a"}`,
+                          }}
+                        >
+                          {s.type === "file" ? "file" : "chat"}
+                        </span>
+                        <div>
+                          <p style={{ color: "#a1a1aa" }}>{s.label}</p>
+                          <p style={{ color: "#71717a" }}>{s.contribution}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div
-                  className="pt-3 mt-3"
+                  className="pt-3 mt-1"
                   style={{ borderTop: "1px solid #27272a" }}
                 >
                   <p className="text-xs" style={{ color: "#71717a" }}>
-                    This is a first-pass brain. Continue the interview to add more depth.
+                    This is a first-pass brain. Continue the interview or load more files to add depth.
                   </p>
                 </div>
               </div>
