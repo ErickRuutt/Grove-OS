@@ -24,6 +24,117 @@ export default function BlogPage() {
             className="text-xs font-semibold uppercase tracking-wider mb-4"
             style={{ color: "var(--text-muted)" }}
           >
+            May 2026
+          </p>
+          <h2
+            className="font-semibold mb-4"
+            style={{ fontSize: "24px", letterSpacing: "-0.01em", lineHeight: "1.3" }}
+          >
+            <Link
+              href="/blog/marketing-brain-playbook-for-faster-ai-time-to-value"
+              style={{ color: "var(--text-primary)", textDecoration: "none" }}
+            >
+              Marketing Brain Playbook for Faster AI Time-to-Value
+            </Link>
+          </h2>
+          <p
+            style={{
+              fontSize: "16px",
+              color: "var(--text-secondary)",
+              lineHeight: "1.65",
+              marginBottom: "20px",
+            }}
+          >
+            How to turn marketing knowledge into a reusable brain that ships qualified pipeline content faster.
+          </p>
+          <Link
+            href="/blog/marketing-brain-playbook-for-faster-ai-time-to-value"
+            className="text-sm font-semibold"
+            style={{ color: "var(--accent)" }}
+          >
+            Read the article →
+          </Link>
+        </article>
+
+        <article style={{ borderTop: "1px solid var(--border)", paddingTop: "48px", marginTop: "48px" }}>
+          <p
+            className="text-xs font-semibold uppercase tracking-wider mb-4"
+            style={{ color: "var(--text-muted)" }}
+          >
+            May 2026
+          </p>
+          <h2
+            className="font-semibold mb-4"
+            style={{ fontSize: "24px", letterSpacing: "-0.01em", lineHeight: "1.3" }}
+          >
+            <Link
+              href="/blog/sales-brain-for-b2b-and-b2c-revenue-teams"
+              style={{ color: "var(--text-primary)", textDecoration: "none" }}
+            >
+              Sales Brain for B2B and B2C Revenue Teams
+            </Link>
+          </h2>
+          <p
+            style={{
+              fontSize: "16px",
+              color: "var(--text-secondary)",
+              lineHeight: "1.65",
+              marginBottom: "20px",
+            }}
+          >
+            A practical model for shortening discovery cycles, improving follow-up quality, and reducing deal slippage.
+          </p>
+          <Link
+            href="/blog/sales-brain-for-b2b-and-b2c-revenue-teams"
+            className="text-sm font-semibold"
+            style={{ color: "var(--accent)" }}
+          >
+            Read the article →
+          </Link>
+        </article>
+
+        <article style={{ borderTop: "1px solid var(--border)", paddingTop: "48px", marginTop: "48px" }}>
+          <p
+            className="text-xs font-semibold uppercase tracking-wider mb-4"
+            style={{ color: "var(--text-muted)" }}
+          >
+            May 2026
+          </p>
+          <h2
+            className="font-semibold mb-4"
+            style={{ fontSize: "24px", letterSpacing: "-0.01em", lineHeight: "1.3" }}
+          >
+            <Link
+              href="/blog/cs-brain-how-to-accelerate-onboarding-time-to-value"
+              style={{ color: "var(--text-primary)", textDecoration: "none" }}
+            >
+              CS Brain: How to Accelerate Onboarding Time-to-Value
+            </Link>
+          </h2>
+          <p
+            style={{
+              fontSize: "16px",
+              color: "var(--text-secondary)",
+              lineHeight: "1.65",
+              marginBottom: "20px",
+            }}
+          >
+            Build repeatable onboarding, risk detection, and expansion workflows that keep customer outcomes moving.
+          </p>
+          <Link
+            href="/blog/cs-brain-how-to-accelerate-onboarding-time-to-value"
+            className="text-sm font-semibold"
+            style={{ color: "var(--accent)" }}
+          >
+            Read the article →
+          </Link>
+        </article>
+
+        <article style={{ borderTop: "1px solid var(--border)", paddingTop: "48px" }}>
+          <p
+            className="text-xs font-semibold uppercase tracking-wider mb-4"
+            style={{ color: "var(--text-muted)" }}
+          >
             April 2026
           </p>
           <h2
