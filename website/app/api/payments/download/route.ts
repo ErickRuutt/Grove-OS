@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { generateExportZip } from "@/lib/export-generator";
 import fs from "fs/promises";
 import { createReadStream } from "fs";
@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
 
   // Verify payment via Stripe
   let stripeSession: Stripe.Checkout.Session;
+  const stripe = getStripe();
   try {
     stripeSession = await stripe.checkout.sessions.retrieve(stripeSessionId);
   } catch {

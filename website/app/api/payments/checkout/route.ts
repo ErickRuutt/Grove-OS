@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe, EXPORT_PRICE_CENTS, EXPORT_PRODUCT_NAME } from "@/lib/stripe";
+import { getStripe, isStripeConfigured, EXPORT_PRICE_CENTS, EXPORT_PRODUCT_NAME } from "@/lib/stripe";
 
 const SESSION_ID_RE = /^[a-zA-Z0-9_-]{1,100}$/;
 
@@ -13,6 +13,15 @@ export async function POST(req: NextRequest) {
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `https://${req.headers.get("host")}`;
 
+    // Fall back to permission-gated flow when Stripe is not configured
+    if (!isStripeConfigured()) {
+      return NextResponse.json({
+        url: `${baseUrl}/payment/permission?interview_session_id=${sessionId}`,
+        mode: "permission",
+      });
+    }
+
+    const stripe = getStripe();
     const checkoutSession = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -42,7 +51,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ url: checkoutSession.url });
+    return NextResponse.json({ url: checkoutSession.url, mode: "stripe" });
   } catch (error) {
     console.error("Checkout creation error:", error);
     return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
