@@ -64,6 +64,8 @@ export default function InterviewPage() {
   const [dragging, setDragging] = useState(false);
   const [pasteMode, setPasteMode] = useState(false);
   const [pasteContent, setPasteContent] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +128,24 @@ export default function InterviewPage() {
       ]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleExportCheckout() {
+    setCheckoutLoading(true);
+    setCheckoutError("");
+    try {
+      const res = await fetch("/api/payments/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start checkout");
+      window.location.href = data.url;
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : "Checkout failed");
+      setCheckoutLoading(false);
     }
   }
 
@@ -715,6 +735,33 @@ export default function InterviewPage() {
                 >
                   <p className="text-xs" style={{ color: "#71717a" }}>
                     This is a first-pass brain. Continue the interview or load more files to add depth.
+                  </p>
+                </div>
+
+                <div
+                  className="pt-3 mt-1 space-y-2"
+                  style={{ borderTop: "1px solid #27272a" }}
+                >
+                  <button
+                    onClick={handleExportCheckout}
+                    disabled={checkoutLoading}
+                    className="w-full py-2.5 rounded-xl text-sm font-medium transition-colors"
+                    style={{
+                      background: checkoutLoading ? "#18181b" : "#22c55e",
+                      color: checkoutLoading ? "#71717a" : "#000",
+                      border: checkoutLoading ? "1px solid #27272a" : "none",
+                      cursor: checkoutLoading ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {checkoutLoading ? "Redirecting to checkout…" : "Export full report — $29"}
+                  </button>
+                  {checkoutError && (
+                    <p className="text-xs" style={{ color: "#ef4444" }}>
+                      {checkoutError}
+                    </p>
+                  )}
+                  <p className="text-xs text-center" style={{ color: "#3f3f46" }}>
+                    Zip bundle · summary · context graph · transcripts
                   </p>
                 </div>
               </div>
