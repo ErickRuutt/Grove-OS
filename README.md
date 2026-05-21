@@ -1,12 +1,3 @@
-This version is structured more like a high-quality early-stage infrastructure product README:
-
-* clearer scanning
-* more concrete examples
-* stronger differentiation
-* less buzzword-heavy
-* more trustworthy
-* more “operational intelligence platform” than “AI experiment”
-
 Grove
 
 An AI orchestration harness for businesses that want AI systems grounded in how their business actually operates.
