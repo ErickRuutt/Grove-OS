@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import {
   LOW_CONFIDENCE_THRESHOLD,
   LOW_CONFIDENCE_FOLLOWUPS,
+  getFollowUpsForConfidence,
   getClassificationConfidence,
   getLowConfidenceFollowUps,
 } from "../lib/interview-confidence.js";
@@ -98,4 +99,20 @@ test("[malformed] numeric input coerced to string-like check does not throw", ()
   assert.doesNotThrow(() => {
     getLowConfidenceFollowUps("0.849");
   });
+});
+
+test("[numeric-fixtures] literal 0.849/0.850/0.900 enforce strict < 0.85 gate", () => {
+  const missingFollowUps = [LOW_CONFIDENCE_FOLLOWUPS[0], LOW_CONFIDENCE_FOLLOWUPS[4]];
+
+  const low = getFollowUpsForConfidence(0.849, missingFollowUps);
+  assert.equal(low.confidence, 0.849);
+  assert.deepEqual(low.followUps, missingFollowUps);
+
+  const boundary = getFollowUpsForConfidence(0.85, missingFollowUps);
+  assert.equal(boundary.confidence, 0.85);
+  assert.deepEqual(boundary.followUps, []);
+
+  const high = getFollowUpsForConfidence(0.9, missingFollowUps);
+  assert.equal(high.confidence, 0.9);
+  assert.deepEqual(high.followUps, []);
 });
