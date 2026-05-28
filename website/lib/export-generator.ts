@@ -4,9 +4,10 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import { createWriteStream } from "fs";
 import path from "path";
+import { loadSession } from "./interview-store";
+import type { FileSignal } from "./interview-store";
 
-const DATA_DIR = path.join(process.cwd(), "data", "interviews");
-const EXPORTS_DIR = path.join(process.cwd(), "data", "exports");
+const EXPORTS_DIR = "/tmp/grove-exports";
 
 export type ExportResult = {
   filePath: string;
@@ -28,11 +29,8 @@ function slugify(name: string): string {
 export async function generateExportZip(sessionId: string): Promise<ExportResult> {
   await fs.mkdir(EXPORTS_DIR, { recursive: true });
 
-  const sessionPath = path.join(DATA_DIR, `${sessionId}.json`);
-  let sessionData: Record<string, unknown>;
-  try {
-    sessionData = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
-  } catch {
+  const sessionData = await loadSession(sessionId);
+  if (!sessionData) {
     throw new Error(`Session not found: ${sessionId}`);
   }
 

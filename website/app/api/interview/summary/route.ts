@@ -1,33 +1,60 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-import type { FileSignal } from "../upload/route";
+import { loadSession, saveSummary } from "@/lib/interview-store";
+import type { FileSignal } from "@/lib/interview-store";
 
 const client = new Anthropic();
 
-const DATA_DIR = path.join(process.cwd(), "data", "interviews");
+type TaggedItem = {
+  label: string;
+  tag: "FACT" | "INFERENCE" | "OPEN";
+  confidence: number;
+  source: "website_crawl" | "user_provided" | "docs_inferred" | "mixed";
+  value: string;
+};
 
-const SUMMARY_PROMPT = `Based on the interview transcript and any uploaded document signals below, extract a unified company brain summary.
+const SUMMARY_PROMPT = `Based on the interview transcript and uploaded document signals, build a unified company-brain summary aligned to phase outputs.
 
-Return a JSON object with:
+Return ONLY valid JSON in this exact shape:
 {
   "companyName": "...",
-  "whatTheyDo": "1-2 sentence description",
-  "whoTheyServe": "target customer description",
-  "keyProcesses": ["process 1", "process 2", ...],
-  "keyTools": ["tool 1", "tool 2", ...],
-  "howDecisionsAreMade": "description of decision-making",
-  "informalKnowledge": ["thing 1", "thing 2", ...],
-  "whatMakesThemDifferent": "unique value proposition",
-  "openQuestions": ["gap 1", "gap 2", ...],
+  "whatTheyDo": "...",
+  "whoTheyServe": "...",
+  "keyProcesses": ["..."],
+  "keyTools": ["..."],
+  "howDecisionsAreMade": "...",
+  "informalKnowledge": ["..."],
+  "whatMakesThemDifferent": "...",
+  "openQuestions": ["..."],
+  "classification": {
+    "fact": [{"label":"...","confidence":0.0,"source":"user_provided","value":"..."}],
+    "inference": [{"label":"...","confidence":0.0,"source":"docs_inferred","value":"..."}],
+    "open": [{"label":"...","confidence":0.0,"source":"mixed","value":"..."}]
+  },
+  "completeness": {
+    "classificationComplete": "Yes|No",
+    "needsFollowUp": "Yes|No",
+    "missingFields": ["..."],
+    "ambiguousFields": ["..."]
+  },
+  "outputArtifacts": [
+    {
+      "name": "company-brain-summary",
+      "derived": true,
+      "traceableSourceFields": ["..."]
+    }
+  ],
   "sources": [
-    { "label": "Interview transcript", "type": "interview", "contribution": "brief description of what this contributed" },
-    { "label": "filename.pdf", "type": "file", "contribution": "brief description of what this contributed" }
+    { "label": "Interview transcript", "type": "interview", "contribution": "..." },
+    { "label": "filename.pdf", "type": "file", "contribution": "..." }
   ]
 }
 
-Only include fields you have evidence for. Merge signals from all sources into one unified brain — do not produce parallel views. In "sources", only include sources that actually contributed signal. Return ONLY valid JSON.`;
+Rules:
+- Put each classification line into exactly one group: fact, inference, or open.
+- Every classification item MUST include confidence and source.
+- Mark outputArtifacts as derived=true and include traceable source fields.
+- Keep confidence between 0 and 1.`;
 
 function formatFileSignals(signals: FileSignal[]): string {
   if (!signals.length) return "";
@@ -44,20 +71,19 @@ function formatFileSignals(signals: FileSignal[]): string {
     .join("\n\n");
 }
 
+function normalizeClassification(items: TaggedItem[] | undefined, tag: TaggedItem["tag"]) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({ ...item, tag }));
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { sessionId, messages } = await req.json();
 
-    // Load stored file signals for this session
     let fileSignals: FileSignal[] = [];
     if (sessionId) {
-      try {
-        const sessionPath = path.join(DATA_DIR, `${sessionId}.json`);
-        const sessionData = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
-        fileSignals = sessionData.fileSignals || [];
-      } catch {
-        // no session file yet
-      }
+      const session = await loadSession(sessionId);
+      fileSignals = session?.fileSignals ?? [];
     }
 
     const transcript = messages
@@ -65,7 +91,6 @@ export async function POST(req: NextRequest) {
       .join("\n\n");
 
     const fileSignalText = formatFileSignals(fileSignals);
-
     const userContent = fileSignalText
       ? `Interview transcript:\n\n${transcript}\n\n${fileSignalText}`
       : `Interview transcript:\n\n${transcript}`;
@@ -77,10 +102,9 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: userContent }],
     });
 
-    const text =
-      response.content[0].type === "text" ? response.content[0].text : "";
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
 
-    let summary;
+    let summary: Record<string, unknown>;
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       summary = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
@@ -88,21 +112,15 @@ export async function POST(req: NextRequest) {
       summary = { error: "Could not parse summary" };
     }
 
+    const classification = (summary.classification as Record<string, TaggedItem[]>) || {};
+    summary.classificationTagged = [
+      ...normalizeClassification(classification.fact, "FACT"),
+      ...normalizeClassification(classification.inference, "INFERENCE"),
+      ...normalizeClassification(classification.open, "OPEN"),
+    ];
+
     if (sessionId) {
-      const filePath = path.join(DATA_DIR, `${sessionId}.json`);
-      try {
-        const existing = JSON.parse(await fs.readFile(filePath, "utf-8"));
-        await fs.writeFile(
-          filePath,
-          JSON.stringify(
-            { ...existing, summary, summarizedAt: new Date().toISOString() },
-            null,
-            2
-          )
-        );
-      } catch {
-        // session file might not exist
-      }
+      await saveSummary(sessionId, summary);
     }
 
     return NextResponse.json({ summary });

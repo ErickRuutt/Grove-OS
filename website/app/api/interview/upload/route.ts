@@ -1,14 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
 import path from "path";
+import { loadSession, appendFileSignal } from "@/lib/interview-store";
+import type { FileSignal } from "@/lib/interview-store";
 
 export const maxDuration = 60;
 
 const client = new Anthropic();
-
-const DATA_DIR = path.join(process.cwd(), "data", "interviews");
-const UPLOADS_DIR = path.join(process.cwd(), "data", "uploads");
 
 const ANALYSIS_PROMPT = `You are analyzing a document to extract structured signals for a company brain.
 
@@ -40,16 +38,7 @@ async function readAsText(buffer: Buffer, fileName: string): Promise<string | nu
   return null;
 }
 
-export type FileSignal = {
-  fileName: string;
-  mimeType: string;
-  uploadedAt: string;
-  entities?: string[];
-  keyFacts?: string[];
-  relationships?: string[];
-  dates?: string[];
-  decisions?: string[];
-};
+export type { FileSignal };
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,16 +51,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "sessionId required" }, { status: 400 });
     }
 
-    // Check session file count
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const sessionPath = path.join(DATA_DIR, `${sessionId}.json`);
-    let session: Record<string, unknown> = {};
-    try {
-      session = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
-    } catch {
-      // new session
-    }
-    const existingSignals = (session.fileSignals as FileSignal[] | undefined) || [];
+    const existing = await loadSession(sessionId);
+    const existingSignals = existing?.fileSignals ?? [];
     if (existingSignals.length >= 5) {
       return NextResponse.json({ error: "Max 5 files per session" }, { status: 400 });
     }
@@ -103,12 +84,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file or text provided" }, { status: 400 });
     }
 
-    // Save file to disk
-    const uploadDir = path.join(UPLOADS_DIR, sessionId);
-    await fs.mkdir(uploadDir, { recursive: true });
-    await fs.writeFile(path.join(uploadDir, fileName), fileBuffer);
-
-    // Build Claude message content
     const textContent = await readAsText(fileBuffer, fileName);
     let messageContent: Anthropic.MessageParam["content"];
 
@@ -120,7 +95,6 @@ export async function POST(req: NextRequest) {
         },
       ];
     } else {
-      // PDF — use document block
       const base64 = fileBuffer.toString("base64");
       messageContent = [
         {
@@ -161,8 +135,7 @@ export async function POST(req: NextRequest) {
       ...extracted,
     };
 
-    session.fileSignals = [...existingSignals, fileSignal];
-    await fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
+    await appendFileSignal(sessionId, fileSignal);
 
     return NextResponse.json({ signal: fileSignal });
   } catch (error) {
