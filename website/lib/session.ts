@@ -37,10 +37,10 @@ function toHex(buf: ArrayBuffer): string {
     .join("");
 }
 
-function fromHex(hex: string): Uint8Array {
+function fromHex(hex: string): ArrayBuffer {
   const arr = hex.match(/.{2}/g);
-  if (!arr) return new Uint8Array(0);
-  return new Uint8Array(arr.map((h) => parseInt(h, 16)));
+  if (!arr) return new ArrayBuffer(0);
+  return Uint8Array.from(arr.map((h) => parseInt(h, 16))).buffer as ArrayBuffer;
 }
 
 async function makeToken(payload: string, secret: string): Promise<string> {
