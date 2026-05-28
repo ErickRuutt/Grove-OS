@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    const token = createChatAccessToken(`${username.trim()}@grove.local`);
+    const token = await createChatAccessToken(`${username.trim()}@grove.local`);
     const res = NextResponse.json({ ok: true });
     res.cookies.set(CHAT_ACCESS_COOKIE, token, CHAT_ACCESS_COOKIE_OPTIONS);
     return res;

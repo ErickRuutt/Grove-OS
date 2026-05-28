@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   entries[idx] = { ...entry, status: "approved", activationToken: "" };
   await writeRequests(entries);
 
-  const accessToken = createChatAccessToken(entry.email);
+  const accessToken = await createChatAccessToken(entry.email);
   const res = NextResponse.redirect(new URL("/chat", req.nextUrl));
   res.cookies.set(CHAT_ACCESS_COOKIE, accessToken, CHAT_ACCESS_COOKIE_OPTIONS);
   return res;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, SESSION_COOKIE, verifyChatAccessToken, CHAT_ACCESS_COOKIE } from "@/lib/session";
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // /interview gating: requires waitlist cookie (grove_access)
@@ -9,7 +9,7 @@ export function middleware(req: NextRequest) {
   const isInterviewApi = pathname === "/api/interview" || pathname.startsWith("/api/interview/");
   if (isInterviewPage || isInterviewApi) {
     const token = req.cookies.get(SESSION_COOKIE)?.value;
-    if (!token || !verifySessionToken(token)) {
+    if (!token || !(await verifySessionToken(token))) {
       if (isInterviewApi) {
         return NextResponse.json({ error: "Access required" }, { status: 401 });
       }
@@ -28,7 +28,7 @@ export function middleware(req: NextRequest) {
     !pathname.startsWith("/api/chat/activate");
   if (isChatPage || isChatApi) {
     const token = req.cookies.get(CHAT_ACCESS_COOKIE)?.value;
-    if (!token || !verifyChatAccessToken(token)) {
+    if (!token || !(await verifyChatAccessToken(token))) {
       if (isChatApi) {
         return NextResponse.json({ error: "Chat access required" }, { status: 401 });
       }
