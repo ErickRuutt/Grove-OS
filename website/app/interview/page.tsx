@@ -64,8 +64,8 @@ export default function InterviewPage() {
   const [dragging, setDragging] = useState(false);
   const [pasteMode, setPasteMode] = useState(false);
   const [pasteContent, setPasteContent] = useState("");
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,21 +131,30 @@ export default function InterviewPage() {
     }
   }
 
-  async function handleExportCheckout() {
-    setCheckoutLoading(true);
-    setCheckoutError("");
+  async function handleExport() {
+    setExportLoading(true);
+    setExportError("");
     try {
-      const res = await fetch("/api/payments/checkout", {
+      const res = await fetch("/api/interview/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to start checkout");
-      window.location.href = data.url;
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Export failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `grove-brain-${sessionId}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
-      setCheckoutError(err instanceof Error ? err.message : "Checkout failed");
-      setCheckoutLoading(false);
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExportLoading(false);
     }
   }
 
@@ -743,21 +752,21 @@ export default function InterviewPage() {
                   style={{ borderTop: "1px solid #27272a" }}
                 >
                   <button
-                    onClick={handleExportCheckout}
-                    disabled={checkoutLoading}
+                    onClick={handleExport}
+                    disabled={exportLoading}
                     className="w-full py-2.5 rounded-xl text-sm font-medium transition-colors"
                     style={{
-                      background: checkoutLoading ? "#18181b" : "#22c55e",
-                      color: checkoutLoading ? "#71717a" : "#000",
-                      border: checkoutLoading ? "1px solid #27272a" : "none",
-                      cursor: checkoutLoading ? "not-allowed" : "pointer",
+                      background: exportLoading ? "#18181b" : "#22c55e",
+                      color: exportLoading ? "#71717a" : "#000",
+                      border: exportLoading ? "1px solid #27272a" : "none",
+                      cursor: exportLoading ? "not-allowed" : "pointer",
                     }}
                   >
-                    {checkoutLoading ? "Redirecting to checkout…" : "Export full report — $29"}
+                    {exportLoading ? "Building export…" : "Export full report"}
                   </button>
-                  {checkoutError && (
+                  {exportError && (
                     <p className="text-xs" style={{ color: "#ef4444" }}>
-                      {checkoutError}
+                      {exportError}
                     </p>
                   )}
                   <p className="text-xs text-center" style={{ color: "#3f3f46" }}>
